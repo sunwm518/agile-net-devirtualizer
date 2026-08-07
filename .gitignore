@@ -1,0 +1,36 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+
+# Non-redistributable test corpus: real/third-party protected binaries and their runtime DLLs.
+# See README "Test corpus" section for why these are never committed.
+sample1/
+sample2/
+
+# Generated validation/audit output — regeneratable, and historically has contained decompiled
+# source of the real protected samples above. Never commit anything from these directories.
+.validation-current/
+.audit-current/
+reports/
+
+# Sample-specific probe tooling (hardcodes real sample1 UI field names) and the internal
+# regression suite (hardcodes real sample1/sample2 paths) — not part of the public release.
+tools/M5Probe/
+AgileDevirtualizer.Tests/
+
+# Orchestration scripts that hardcode the real sample1/sample2 file names/paths (or, for the
+# sample2 password check, the crackme's actual password and win-string). The generic scripts
+# (validate-common.ps1, build/validate-fault-fixture.ps1, validate-source-fixtures.ps1,
+# validate-method-quality-report.ps1, audit-sample1-ilspy.ps1) take assembly paths as parameters
+# and stay in the repo; only these hardcode the non-redistributable names.
+scripts/validate.ps1
+scripts/validate-cast-cleanup.ps1
+scripts/audit-sample1-method-quality.ps1
+scripts/validate-sample2-password.ps1
+
+# Editor/agent tooling directories, not part of the project itself.
+.agents/
+.codex/
+.claude/
