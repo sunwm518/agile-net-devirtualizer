@@ -11,6 +11,14 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!-- Release builds are what gets published publicly: no .pdb means no file/line info in any
+       exception's stack trace, which means no absolute build-machine path (and no local username)
+       can ever leak through a crash report. Debug builds keep full symbols for local debugging. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="AsmResolver.DotNet" Version="6.0.0" />
   </ItemGroup>

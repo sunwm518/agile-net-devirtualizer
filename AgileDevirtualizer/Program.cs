@@ -8,6 +8,13 @@ using AgileDevirtualizer.Runtime;
 using AsmResolver.DotNet;
 using AsmResolver.PE.DotNet.Metadata.Tables;
 
+// Wraps the whole run: an unhandled exception's default .NET stack trace embeds the build/run
+// machine's own absolute file paths (e.g. a developer's Windows username) — never acceptable for a
+// publicly-distributed CLI tool. Anything genuinely unexpected here is reported by message only;
+// the full exception (with its stack trace) is still available opt-in via DBG=1, matching the
+// existing per-method failure convention below.
+try
+{
 if (args.Length < 2)
 {
     Console.Error.WriteLine("usage: AgileDevirtualizer <input-assembly> <VMRuntime.dll> [output] " +
@@ -420,3 +427,11 @@ if (fail > 0)
         Console.WriteLine(f);
 }
 return fail == 0 ? 0 : 3;
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[!] Unexpected error: {ex.GetType().Name}: {ex.Message}");
+    if (Environment.GetEnvironmentVariable("DBG") == "1")
+        Console.Error.WriteLine(ex);
+    return 99;
+}

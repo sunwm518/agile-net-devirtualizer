@@ -1,3 +1,4 @@
+using System.Linq;
 using AsmResolver.DotNet.Signatures;
 using AsmResolver.PE.DotNet.Cil;
 
@@ -32,14 +33,20 @@ internal sealed partial class ExecuteInterpreter
 
     private void RestoreSnapshot(StateSnapshot s)
     {
-        _eval = new Stack<SymValue>(s.EvalTopToBottom.Reverse()); // Reverse+ctor round-trips the original top order.
+        // Enumerable.Reverse(array), called by its full static form rather than dot-syntax: an
+        // array is also implicitly convertible to Span<T>, and MemoryExtensions.Reverse(Span<T>) —
+        // an in-place, void-returning overload — sits in the same implicitly-global System
+        // namespace as the LINQ one. Which of the two extension-method candidates wins is not
+        // guaranteed identical across SDK versions; calling Enumerable.Reverse directly removes the
+        // ambiguity outright instead of relying on that resolution.
+        _eval = new Stack<SymValue>(Enumerable.Reverse(s.EvalTopToBottom)); // Reverse+ctor round-trips the original top order.
         _locals.Clear();
         foreach (var kv in s.Locals) _locals[kv.Key] = kv.Value;
         if (_out.Count > s.OutCount)
             _out.RemoveRange(s.OutCount, _out.Count - s.OutCount);
         _termKind = s.TermKind; _termTarget = s.TermTarget; _termSwitch = s.TermSwitch;
         _vmValueTypes.Clear();
-        foreach (var t in s.VmValueTypesTopToBottom.Reverse()) _vmValueTypes.Push(t);
+        foreach (var t in Enumerable.Reverse(s.VmValueTypesTopToBottom)) _vmValueTypes.Push(t);
         _vmLocalKnownTypes.Clear();
         foreach (var kv in s.VmLocalKnownTypes) _vmLocalKnownTypes[kv.Key] = kv.Value;
     }

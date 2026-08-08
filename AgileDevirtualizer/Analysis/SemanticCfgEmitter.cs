@@ -72,7 +72,24 @@ internal static class SemanticCfgEmitter
         }
         startIndex[instructionCount] = body.Instructions.Count;
         if (body.Instructions.Count == 0 || body.Instructions[^1].OpCode.Code != CilCode.Ret)
+        {
+            var returnType = target.Signature!.ReturnType;
+            if (!returnType.IsTypeOf("System", "Void"))
+            {
+                // This position can land here as dead code after e.g. a trailing `throw` (the VM's
+                // own bytecode was itself just an unconditional throw), or as a real branch target
+                // for an out-of-range dispatch jump — either way, a bare `ret` is invalid CIL for a
+                // non-void method (PEVerify: "return value missing on the stack"). `initobj` works
+                // uniformly on reference and value types alike (nulling the former), so producing
+                // default(T) here needs no type-category branching.
+                var defaultTemp = new CilLocalVariable(importer.ImportTypeSignature(returnType));
+                body.LocalVariables.Add(defaultTemp);
+                body.Instructions.Add(new CilInstruction(CilOpCodes.Ldloca, defaultTemp));
+                body.Instructions.Add(new CilInstruction(CilOpCodes.Initobj, returnType.ToTypeDefOrRef()));
+                body.Instructions.Add(new CilInstruction(CilOpCodes.Ldloc, defaultTemp));
+            }
             body.Instructions.Add(new CilInstruction(CilOpCodes.Ret));
+        }
         for (int index = instructionCount; index >= 0; index--)
             labels[index].Instruction = body.Instructions[
                 Math.Min(startIndex[index], body.Instructions.Count - 1)];

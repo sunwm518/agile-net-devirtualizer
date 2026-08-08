@@ -302,6 +302,16 @@ internal sealed partial class ExecuteInterpreter
         MethodDefinition? definition;
         try { definition = called.Resolve(_ctx); }
         catch { return false; }
+
+        // A parameterless accessor on the boxed-value wrapper itself, reached indirectly through a
+        // nested helper call rather than straight from a handler's own execute-IL. Classify it the
+        // same way HandleValueAccessor already does for the direct case — walking its real body (a
+        // field read guarded by MarshalByRefObject/remoting checks) is neither necessary nor
+        // generically walkable, but the accessor's OWN meaning (pass the value through, narrow it to
+        // a numeric conversion, or surface its Type) is already known and proven.
+        if (definition is { IsStatic: false } && count == 1 && ReferenceEquals(definition.DeclaringType, _vocab.ValueType))
+            return TryInlineValueAccessor(definition, callArgs[0], emitted, out result);
+
         if (definition is not null && ReferenceEquals(definition.DeclaringModule, _vocab.ValueType.DeclaringModule))
         {
             if (!TryRunRuntimeHelper(definition, callArgs, active, depth + 1, out result, out var nested))
@@ -325,6 +335,39 @@ internal sealed partial class ExecuteInterpreter
             return true;
         }
         TraceRuntimeInline($"unmodelled nested call: {called}");
+        return false;
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="HandleValueAccessor"/>'s classification of a parameterless accessor on the
+    /// boxed-value wrapper type, adapted to this walker's local stack/emitted-list plumbing instead
+    /// of the live <c>_eval</c>/<c>_out</c> state the direct-call path mutates. Same accessor, same
+    /// meaning, regardless of which caller reaches it.
+    /// </summary>
+    private bool TryInlineValueAccessor(IMethodDescriptor accessor, SymValue receiver, List<LiftedOp> emitted,
+                                        out SymValue result)
+    {
+        var ret = SigReturn(accessor);
+        if (ret is null || ret.IsTypeOf("System", "Object")
+            || (ResolveTypeDef(ret) is { } retDef && ReferenceEquals(retDef, _vocab.ValueType)))
+        {
+            result = receiver; // the value passes through unchanged
+            return true;
+        }
+
+        if (ret.IsTypeOf("System", "Type"))
+        {
+            result = KnownTypeOf(receiver) is { } kt
+                ? new SymValue.Operand(kt)
+                : new SymValue.Unknown("runtime-inline-gettype-unknown");
+            return true;
+        }
+
+        if (ConvOpFor(ret) is { } conv)
+            return TryInlineConversion(conv, receiver, emitted, out result);
+
+        // Storage-kind/metadata accessor — not modelled here; fail closed rather than guess.
+        result = new SymValue.Unknown("runtime-inline-valacc-meta");
         return false;
     }
 

@@ -1,3 +1,4 @@
+using AgileDevirtualizer.Runtime;
 using AsmResolver.DotNet;
 using AsmResolver.DotNet.Signatures;
 using AsmResolver.PE.DotNet.Metadata.Tables;
@@ -74,7 +75,7 @@ internal static class LocalsDecoder
             if (m is TypeSpecification spec && spec.Signature is { } s)
                 return s;
             if (m is ITypeDefOrRef t)
-                return t.ToTypeSignature(t.Resolve(null)?.IsValueType ?? false);
+                return t.ToTypeSignature(SafeResolve.Type(t)?.IsValueType ?? false);
         }
         return module.CorLibTypeFactory.Object;
     }

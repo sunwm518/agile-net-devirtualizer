@@ -60,7 +60,24 @@ internal static class CilBuilder
         // in one (e.g. the last VM instruction was itself a `ret`); two in a row is dead code that
         // trips AsmResolver's stack calculator.
         if (instrs.Count == 0 || instrs[^1].OpCode.Code != CilCode.Ret)
+        {
+            var returnType = target.Signature!.ReturnType;
+            if (!returnType.IsTypeOf("System", "Void"))
+            {
+                // This position can land here as dead code after e.g. a trailing `throw` (the VM's
+                // own bytecode was itself just an unconditional throw), or as a real branch target
+                // for an out-of-range dispatch jump — either way, a bare `ret` is invalid CIL for a
+                // non-void method (PEVerify: "return value missing on the stack"). `initobj` works
+                // uniformly on reference and value types alike (nulling the former), so producing
+                // default(T) here needs no type-category branching.
+                var defaultTemp = new CilLocalVariable(importer.ImportTypeSignature(returnType));
+                body.LocalVariables.Add(defaultTemp);
+                instrs.Add(new CilInstruction(CilOpCodes.Ldloca, defaultTemp));
+                instrs.Add(new CilInstruction(CilOpCodes.Initobj, returnType.ToTypeDefOrRef()));
+                instrs.Add(new CilInstruction(CilOpCodes.Ldloc, defaultTemp));
+            }
             instrs.Add(new CilInstruction(CilOpCodes.Ret));
+        }
 
         for (int i = n; i >= 0; i--)
             labels[i].Instruction = instrs[Math.Min(startIndex[i], instrs.Count - 1)];

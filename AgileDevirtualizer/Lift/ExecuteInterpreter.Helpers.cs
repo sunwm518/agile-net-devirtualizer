@@ -276,6 +276,11 @@ internal sealed partial class ExecuteInterpreter
     /// <summary>
     /// True if control from <paramref name="index"/> runs straight into a <c>throw</c> before any
     /// return — i.e. a VM runtime guard (null/type check) that has no counterpart in the original CIL.
+    /// Stops (and answers false) at the first branch of any kind: a throw beyond that point is only
+    /// reached through a FURTHER, separate condition (e.g. a nested "if (bad) throw" inside this
+    /// target's own body), not unconditionally from here — counting it anyway previously caused an
+    /// unrelated outer condition (e.g. a null check wrapping that nested guard) to be misresolved as
+    /// itself a guard, silently discarding a real value that should have been kept.
     /// </summary>
     private bool IsGuardThrowTarget(int index)
     {
@@ -285,6 +290,18 @@ internal sealed partial class ExecuteInterpreter
             {
                 case CilCode.Throw: return true;
                 case CilCode.Ret: return false;
+                case CilCode.Br: case CilCode.Br_S:
+                case CilCode.Brtrue: case CilCode.Brtrue_S:
+                case CilCode.Brfalse: case CilCode.Brfalse_S:
+                case CilCode.Beq: case CilCode.Beq_S:
+                case CilCode.Bne_Un: case CilCode.Bne_Un_S:
+                case CilCode.Blt: case CilCode.Blt_S: case CilCode.Blt_Un: case CilCode.Blt_Un_S:
+                case CilCode.Ble: case CilCode.Ble_S: case CilCode.Ble_Un: case CilCode.Ble_Un_S:
+                case CilCode.Bgt: case CilCode.Bgt_S: case CilCode.Bgt_Un: case CilCode.Bgt_Un_S:
+                case CilCode.Bge: case CilCode.Bge_S: case CilCode.Bge_Un: case CilCode.Bge_Un_S:
+                case CilCode.Switch:
+                case CilCode.Leave: case CilCode.Leave_S:
+                    return false;
             }
         }
         return false;

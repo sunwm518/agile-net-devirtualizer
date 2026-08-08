@@ -106,7 +106,7 @@ internal sealed class RuntimeModel
             foreach (var instr in body.Instructions)
             {
                 if (instr.OpCode.Code == CilCode.Ldtoken
-                    && instr.Operand is ITypeDefOrRef tref && tref.Resolve(null) is { } td)
+                    && instr.Operand is ITypeDefOrRef tref && SafeResolve.Type(tref) is { } td)
                     ldtokenTypes.Add(td);
             }
             if (ldtokenTypes.Count < 2)
@@ -115,14 +115,14 @@ internal sealed class RuntimeModel
             // The handler base is the common base of the registered types. Restrict to the run
             // that actually derives from it (ignore incidental ldtokens), preserving order.
             var commonBase = ldtokenTypes
-                .Select(t => t.BaseType?.Resolve(null))
+                .Select(t => SafeResolve.Type(t.BaseType))
                 .Where(b => b is not null)
                 .GroupBy(b => b!)
                 .MaxBy(g => g.Count())?.Key;
             if (commonBase is null || !TryGetHandlerSlots(commonBase, out var readSlot, out var execSlot, out var ctx))
                 continue;
 
-            var handlers = ldtokenTypes.Where(t => t.BaseType?.Resolve(null) == commonBase).ToList();
+            var handlers = ldtokenTypes.Where(t => SafeResolve.Type(t.BaseType) == commonBase).ToList();
             if (best is null || handlers.Count > best.Value.Handlers.Count)
                 best = new RegistryMatch(handlers, commonBase, readSlot!, execSlot!, ctx!);
         }
@@ -147,7 +147,7 @@ internal sealed class RuntimeModel
         execSlot = abstractSlots.FirstOrDefault(m => !IsBinaryReader(m.Signature!.ParameterTypes[0]));
         if (readSlot is null || execSlot is null)
             return false;
-        ctx = execSlot.Signature!.ParameterTypes[0].Resolve(null);
+        ctx = SafeResolve.Type(execSlot.Signature!.ParameterTypes[0]);
         return ctx is not null;
     }
 
@@ -163,7 +163,7 @@ internal sealed class RuntimeModel
 
         foreach (var impl in type.MethodImplementations)
         {
-            if (impl.Declaration?.Resolve(null) == wantedSlot && impl.Body?.Resolve(null) is { } body)
+            if (SafeResolve.Method(impl.Declaration) == wantedSlot && SafeResolve.Method(impl.Body) is { } body)
                 return body;
         }
 
@@ -173,7 +173,7 @@ internal sealed class RuntimeModel
             && sig.ParameterTypes.Count == 1
             && (sig.ReturnType?.IsTypeOf("System", "Void") ?? false)
             && (wantReader ? IsBinaryReader(sig.ParameterTypes[0])
-                           : sig.ParameterTypes[0].Resolve(null) == ctxType));
+                           : SafeResolve.Type(sig.ParameterTypes[0]) == ctxType));
     }
 
     private static bool IsBinaryReader(TypeSignature? sig) => sig?.IsTypeOf("System.IO", "BinaryReader") ?? false;
